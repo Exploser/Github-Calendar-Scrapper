@@ -1,54 +1,27 @@
-/*******************************************************************
-    A sample project for making a HTTP/HTTPS GET request on an ESP8266
-
-    It will connect to the given request and print the body to
-    serial monitor
-
-    Parts:
-    D1 Mini ESP8266 * - http://s.click.aliexpress.com/e/uzFUnIe
-
- *  * = Affilate
-
-    If you find what I do usefuland would like to support me,
-    please consider becoming a sponsor on Github
-    https://github.com/sponsors/witnessmenow/
 
 
-    Written by Brian Lough
-    YouTube: https://www.youtube.com/brianlough
-    Tindie: https://www.tindie.com/stores/brianlough/
-    Twitter: https://twitter.com/witnessmenow
- *******************************************************************/
-
-// ----------------------------
-// Standard Libraries
-// ----------------------------
-
+////
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
 
-//------- Replace the following! ------
-char ssid[] = "Kroneinc";         // your network SSID (name)
-char password[] = "5197789927"; // your network key
+char ssid[] = "Kroneinc";        // your network SSID (name)
+char password[] = "5197789927";  // your network key
 
-// For Non-HTTPS requests
-// WiFiClient client;
-
-// For HTTPS requests
 WiFiClientSecure client;
-
-// Just the base of the URL you want to connect to
 #define TEST_HOST "github.com"
-// #define TEST_HOST "api.coingecko.com"
+#define MAX_COORDINATES 624
 
-// OPTIONAL - The fingerprint of the site you want to connect to.
-#define TEST_HOST_FINGERPRINT "E7 03 5B CC 1C 18 77 1F 79 2F 90 86 6B 6C 1D F8 DF AA BD C0"
-// The finger print will change every few months.
+// Function prototype
+void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]);
+
+int coordinates[MAX_COORDINATES][2];
+int count = 0;
+
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(230400);
 
-  // Connect to WiFi
+  
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
 
@@ -61,111 +34,118 @@ void setup() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 
-  // If you don't need to check the fingerprint
-  client.setInsecure();
-
-  makeHTTPRequest();
+  client.setInsecure();  // Disable SSL verification for testing
+  makeHTTPRequest(&count, coordinates);
 }
 
-void makeHTTPRequest() {
-
-  String response = "";
-  
-  // Open a connection to the server
+void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
   if (!client.connect(TEST_HOST, 443)) {
     Serial.println("Connection failed");
     return;
   }
-  
+
   Serial.println("Connected to server");
 
-  yield();
-
-  // Send HTTP request
-  // This is the second half of a request (everything that comes after the base URL)
-  // HTTP 1.0 is ideal as the response wont be chunked
-  // But some API will return 1.1 regardless, so we need
-  // to handle both.
   client.print("GET /users/Exploser/contributions?from=2024-07-31&to=2024-08-27 HTTP/1.1\r\n");
-
-  //Headers
   client.print("Host: ");
   client.println(TEST_HOST);
-  // client.println("Connection: close");
-  client.println(F("Cache-Control: no-cache"));
-  if (client.println() == 0)
-  {
-    Serial.println(F("Failed to send request"));
-    // return;
-  }
+  client.println("Connection: close");
+  client.println();
 
-  Serial.println("Fetch Done");
+  String response = "";
+  bool startStoring = false;
+  char buffer[256];
 
-  // Check HTTP status
-  char status[32] = {0};
-  client.readBytesUntil('\r', status, sizeof(status));
+  // Read and process the response
+  while (client.connected() || client.available()) {
+    if (client.available()) {
+      String line = client.readStringUntil('\n');
 
-  // Check if it responded "OK" with either HTTP 1.0 or 1.1
-  if (strcmp(status, "HTTP/1.0 200 OK") != 0 || strcmp(status, "HTTP/1.1 200 OK") != 0)
-  {
-    {
-      Serial.print(F("Unexpected response: "));
-      Serial.println(status);
-      // return;
+      if (line.indexOf("<tbody>") != -1) {
+        startStoring = true;
+        Serial.println("Found <tbody> - starting to process data.");
+      }
+
+      if (startStoring) {
+        // Check if the line contains a <td> tag
+        int tdStartIndex = line.indexOf("<td");
+        while (tdStartIndex != -1) {
+          int tdEndIndex = line.indexOf(">", tdStartIndex);
+          if (tdEndIndex != -1) {
+            String tdElement = line.substring(tdStartIndex, tdEndIndex + 1);
+
+            String dataLevel = extractAttribute(tdElement, "data-level=\"");
+            if (dataLevel.length() > 0) {
+              // Serial.print("Data Level: ");
+              // Serial.print(dataLevel);
+
+              if (dataLevel != "0") {
+                // Extract the id attribute from the <td> element
+                String id = extractAttribute(tdElement, "id=\"contribution-day-component-");
+                if (id.length() > 0) {
+                  Serial.print("/nFound id: ");
+                  Serial.println(id);
+
+                  // Convert id to C-style string
+                  const char* id_cstr = id.c_str();
+
+                  // Find the dash character
+                  char* dash_pos = strchr(const_cast<char*>(id_cstr), '-');
+                  if (dash_pos) {
+                    *dash_pos = '\0';  // Null-terminate the x part
+                    int x = atoi(id_cstr);          // Convert x part to integer
+                    int y = atoi(dash_pos + 1);    // Convert y part to integer
+
+                    // Store the coordinates in the array
+                    if (*count < MAX_COORDINATES) {
+                      coordinates[*count][0] = x;
+                      coordinates[*count][1] = y;
+                      // Serial.println(y);
+                      (*count)++;
+                    } else {
+                      Serial.println("Reached maximum number of coordinates");
+                      return;  // Array is full
+                    }
+                  }
+                }
+              }
+            }
+
+            // Move to the next <td> tag in the line
+            tdStartIndex = line.indexOf("<td", tdEndIndex);
+          } else {
+            break;  // Exit loop if no closing > is found
+          }
+        }
+
+        if (line.indexOf("</tbody>") != -1) {
+          startStoring = false;  // Stop storing if you reach the end of <tbody>
+        }
+      }
     }
   }
 
-  Serial.print(F("GOING INTO THE DEEP"));
-  
-  while (client.available() && client.peek() != '{' && client.peek() != '[')
-    {
-      char c = 0;
-      client.readBytes(&c, 1);
-      Serial.print(c);
-      Serial.println("BAD");
-    }
+  Serial.println("Finished processing response.");
+  Serial.println(coordinates[0][0]);
+  Serial.println(*count);
 
-  // Print the response body
-  while (client.available()) {
-    char c = client.read();
-    // Serial.print(c);
-    response += c;
-  }
-
-  extractTDAttributes(response);
+  // parseResponse(response);
 }
 
-void extractTDAttributes(String html) {
-  int startIndex = 0;
-  while ((startIndex = html.indexOf("<td", startIndex)) != -1) {
-    int endIndex = html.indexOf(">", startIndex);
-    if (endIndex == -1) break;
-
-    String tdElement = html.substring(startIndex, endIndex + 1);
-
-    String id = extractAttribute(tdElement, "id");
-    String dataLevel = extractAttribute(tdElement, "data-level");
-
-    if (id.length() > 0 && dataLevel.length() > 0) {
-      Serial.println("id: " + id + ", data-level: " + dataLevel);
-    }
-
-    startIndex = endIndex + 1;
-  }
-}
-
+// Helper function to extract attribute value
 String extractAttribute(String element, String attribute) {
-  int attrPos = element.indexOf(attribute + "=\"");
-  if (attrPos == -1) return "";
-
-  int startPos = attrPos + attribute.length() + 2;
-  int endPos = element.indexOf("\"", startPos);
-  if (endPos == -1) return "";
-
-  return element.substring(startPos, endPos);
+  String attributeValue = "";
+  int attrStartIndex = element.indexOf(attribute);
+  if (attrStartIndex != -1) {
+    int valueStartIndex = attrStartIndex + attribute.length();
+    int valueEndIndex = element.indexOf("\"", valueStartIndex);
+    if (valueEndIndex != -1) {
+      attributeValue = element.substring(valueStartIndex, valueEndIndex);
+    }
+  }
+  return attributeValue;
 }
 
-void loop()
-{
-  // put your main code here, to run repeatedly:
+void loop() {
+  // No repeated tasks
 }
