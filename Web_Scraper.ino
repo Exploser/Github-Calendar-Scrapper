@@ -96,8 +96,8 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
                 // Extract the id attribute from the <td> element
                 String id = extractAttribute(tdElement, "id=\"contribution-day-component-");
                 if (id.length() > 0) {
-                  Serial.print("/nFound id: ");
-                  Serial.println(id);
+                  // Serial.print("/nFound id: ");
+                  // Serial.println(id);
 
                   // Convert id to C-style string
                   const char* id_cstr = id.c_str();
@@ -140,15 +140,15 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
   Serial.println("Finished processing response.");
 
    // Loop through all the stored coordinates and print them
-  Serial.println("Stored Coordinates:");
+  // Serial.println("Stored Coordinates:");
   for (int i = 0; i < *count; i++) {
-    Serial.print("Coordinate ");
-    Serial.print(i);
-    Serial.print(": (");
-    Serial.print(coordinates[i][0]);
-    Serial.print(", ");
-    Serial.print(coordinates[i][1]);
-    Serial.println(")");
+    // Serial.print("Coordinate ");
+    // Serial.print(i);
+    // Serial.print(": (");
+    // Serial.print(coordinates[i][0]);
+    // Serial.print(", ");
+    // Serial.print(coordinates[i][1]);
+    // Serial.println(")");
 
     display.setPoint(coordinates[i][0],(coordinates[i][1] - 6), true);
   }
@@ -156,7 +156,6 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
   Serial.println("Total number of coordinates:");
   Serial.println(*count);
 
-  // parseResponse(response);
 }
 
 // Helper function to extract attribute value
@@ -174,5 +173,7 @@ String extractAttribute(String element, String attribute) {
 }
 
 void loop() {
-  // No repeated tasks
+  delay(60000);
+  Serial.println("Refetching Data");
+  makeHTTPRequest(&count, coordinates);
 }
