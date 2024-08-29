@@ -1,20 +1,20 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <WiFiClientSecure.h>
-
+#include <WiFiManager.h>
 #include <MD_MAX72xx.h>
+#include <EEPROM.h>
 #include <SPI.h>
 
-char ssid[] = "Kroneinc";        // your network SSID (name)
-char password[] = "5197789927";  // your network key
-
-WiFiClientSecure client;
 #define TEST_HOST "github.com"
 #define MAX_COORDINATES 624
 
 // Define hardware type, size, and pin connections
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 4  // Number of displays connected in series
+
+#define EEPROM_SIZE 512 // Define the size of EEPROM
+#define GITHUB_USERNAME_ADDR 0 // Start address for GitHub username
 
 #define DATA_PIN   D7  // GPIO 13 on ESP8266 (D7 on NodeMCU)
 #define CS_PIN     D8  // GPIO 15 on ESP8266 (D8 on NodeMCU)
@@ -25,9 +25,12 @@ MD_MAX72XX display = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DE
 // Function prototype
 void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]);
 
+WiFiManager wm;  // Global WiFiManager instance
+WiFiManagerParameter custom_github_username; // Parameter for GitHub username
+
+WiFiClientSecure client;
 int coordinates[MAX_COORDINATES][2];
 int count = 0;
-
 
 void setup() {
   Serial.begin(230400);
@@ -35,20 +38,43 @@ void setup() {
   display.begin();  // Initialize the display
   display.clear();  // Clear any previous data
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
+  EEPROM.begin(EEPROM_SIZE); // Initialize EEPROM
+  String storedUsername = readGitHubUsername();
 
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(500);
+  // Define the custom parameter for the GitHub username
+  int customFieldLength = 40; // Maximum length for the GitHub username input
+  new (&custom_github_username) WiFiManagerParameter("github_username", "GitHub Username", "", customFieldLength, "required placeholder=\"Enter GitHub Username\"");
+
+  // Add the custom parameter to WiFiManager
+  wm.addParameter(&custom_github_username);
+  wm.setSaveParamsCallback(saveParamCallback);  // Callback to save custom parameters
+
+  Serial.print("Connecting to WiFi using WiFiManager");
+
+  if (!wm.autoConnect("DeskHub", "password")) {
+    Serial.println("Failed to connect or hit timeout");
+    delay(3000);
+    ESP.restart();  // Restart if it fails to connect
+  } else {
+    Serial.println("Connected to WiFi!");
+
+    // Ensure the GitHub username is provided
+    String githubUsername = readGitHubUsername();
+    Serial.println(githubUsername);
+    if (strlen(githubUsername.c_str()) == 0) { 
+      Serial.println("GitHub Username is required! Please try again.");
+      wm.resetSettings();
+      ESP.restart();  // Restart to reinitialize WiFiManager
+    } else {
+      Serial.println("GitHub Username: " + githubUsername);
+      Serial.println("IP address: ");
+      Serial.println(WiFi.localIP());
+      
+      saveGitHubUsername(githubUsername.c_str()); // Save username to EEPROM
+      client.setInsecure();
+      makeHTTPRequest(&count, coordinates);
+    }
   }
-  Serial.println(" Connected!");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-
-  client.setInsecure();  // Disable SSL verification for testing
-  makeHTTPRequest(&count, coordinates);
 }
 
 void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
@@ -60,7 +86,6 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
   Serial.println("Connected to server");
 
   client.print("GET /users/Exploser/contributions?from=2024-01-01&to=2024-12-31 HTTP/1.1\r\n");
-  // client.print("GET /Exploser?action=show&controller=profiles&tab=contributions&user_id=Exploser HTTP/1.1\r\n");
   client.print("Host: ");
   client.println(TEST_HOST);
   client.println("Connection: close");
@@ -81,7 +106,6 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
       }
 
       if (startStoring) {
-        // Check if the line contains a <td> tag
         int tdStartIndex = line.indexOf("<td");
         while (tdStartIndex != -1) {
           int tdEndIndex = line.indexOf(">", tdStartIndex);
@@ -89,42 +113,27 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
             String tdElement = line.substring(tdStartIndex, tdEndIndex + 1);
 
             String dataLevel = extractAttribute(tdElement, "data-level=\"");
-            if (dataLevel.length() > 0) {
-              // Serial.print("Data Level: ");
-              // Serial.print(dataLevel);
+            if (dataLevel.length() > 0 && dataLevel != "0") {
+              String id = extractAttribute(tdElement, "id=\"contribution-day-component-");
+              if (id.length() > 0) {
+                const char* id_cstr = id.c_str();
+                char* dash_pos = strchr(const_cast<char*>(id_cstr), '-');
+                if (dash_pos) {
+                  *dash_pos = '\0';  // Null-terminate the x part
+                  int x = atoi(id_cstr);          // Convert x part to integer
+                  int y = atoi(dash_pos + 1);    // Convert y part to integer
 
-              if (dataLevel != "0") {
-                // Extract the id attribute from the <td> element
-                String id = extractAttribute(tdElement, "id=\"contribution-day-component-");
-                if (id.length() > 0) {
-                  // Serial.print("/nFound id: ");
-                  // Serial.println(id);
-
-                  // Convert id to C-style string
-                  const char* id_cstr = id.c_str();
-
-                  // Find the dash character
-                  char* dash_pos = strchr(const_cast<char*>(id_cstr), '-');
-                  if (dash_pos) {
-                    *dash_pos = '\0';  // Null-terminate the x part
-                    int x = atoi(id_cstr);          // Convert x part to integer
-                    int y = atoi(dash_pos + 1);    // Convert y part to integer
-
-                    // Store the coordinates in the array
-                    if (*count < MAX_COORDINATES) {
-                      coordinates[*count][0] = x;
-                      coordinates[*count][1] = y;
-                      (*count)++;
-                    } else {
-                      Serial.println("Reached maximum number of coordinates");
-                      return;  // Array is full
-                    }
+                  if (*count < MAX_COORDINATES) {
+                    coordinates[*count][0] = x;
+                    coordinates[*count][1] = y;
+                    (*count)++;
+                  } else {
+                    Serial.println("Reached maximum number of coordinates");
+                    return;  // Array is full
                   }
                 }
               }
             }
-
-            // Move to the next <td> tag in the line
             tdStartIndex = line.indexOf("<td", tdEndIndex);
           } else {
             break;  // Exit loop if no closing > is found
@@ -140,23 +149,12 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
 
   Serial.println("Finished processing response.");
 
-   // Loop through all the stored coordinates and print them
-  // Serial.println("Stored Coordinates:");
   for (int i = 0; i < *count; i++) {
-    // Serial.print("Coordinate ");
-    // Serial.print(i);
-    // Serial.print(": (");
-    // Serial.print(coordinates[i][0]);
-    // Serial.print(", ");
-    // Serial.print(coordinates[i][1]);
-    // Serial.println(")");
-
     display.setPoint(coordinates[i][0],(coordinates[i][1] - 6), true);
   }
 
   Serial.println("Total number of coordinates:");
   Serial.println(*count);
-
 }
 
 // Helper function to extract attribute value
@@ -172,6 +170,39 @@ String extractAttribute(String element, String attribute) {
   }
   return attributeValue;
 }
+
+// Save parameter callback
+void saveParamCallback() {
+  Serial.println("[CALLBACK] saveParamCallback fired");
+  String githubUsername = String(custom_github_username.getValue());
+  Serial.println("GitHub Username = " + githubUsername);
+  saveGitHubUsername(githubUsername.c_str());
+}
+
+
+void saveGitHubUsername(const char* username) {
+  int i = 0;
+  for (; i < strlen(username); i++) {
+    EEPROM.write(GITHUB_USERNAME_ADDR + i, username[i]); // Write username to EEPROM
+  }
+  EEPROM.write(GITHUB_USERNAME_ADDR + i, '\0'); // Null-terminate the string
+  EEPROM.commit(); // Save changes
+  Serial.println("GitHub username saved to EEPROM.");
+}
+
+String readGitHubUsername() {
+  char username[40]; // Adjust size as needed
+  int i = 0;
+  while (i < 40) { // Reading username from EEPROM
+    char c = EEPROM.read(GITHUB_USERNAME_ADDR + i);
+    if (c == '\0') break;
+    username[i] = c;
+    i++;
+  }
+  username[i] = '\0'; // Null-terminate the string
+  return String(username);
+}
+
 
 void loop() {
   delay(60000);
