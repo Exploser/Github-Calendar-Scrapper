@@ -1,8 +1,8 @@
-
-
-////
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
+
+#include <MD_MAX72xx.h>
+#include <SPI.h>
 
 char ssid[] = "Kroneinc";        // your network SSID (name)
 char password[] = "5197789927";  // your network key
@@ -10,6 +10,16 @@ char password[] = "5197789927";  // your network key
 WiFiClientSecure client;
 #define TEST_HOST "github.com"
 #define MAX_COORDINATES 624
+
+// Define hardware type, size, and pin connections
+#define HARDWARE_TYPE MD_MAX72XX::FC16_HW
+#define MAX_DEVICES 4  // Number of displays connected in series
+
+#define DATA_PIN   D7  // GPIO 13 on ESP8266 (D7 on NodeMCU)
+#define CS_PIN     D8  // GPIO 15 on ESP8266 (D8 on NodeMCU)
+#define CLK_PIN    D5  // GPIO 14 on ESP8266 (D5 on NodeMCU)
+
+MD_MAX72XX display = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 
 // Function prototype
 void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]);
@@ -21,7 +31,9 @@ int count = 0;
 void setup() {
   Serial.begin(230400);
 
-  
+  display.begin();  // Initialize the display
+  display.clear();  // Clear any previous data
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
 
@@ -46,7 +58,8 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
 
   Serial.println("Connected to server");
 
-  client.print("GET /users/Exploser/contributions?from=2024-07-31&to=2024-08-27 HTTP/1.1\r\n");
+  client.print("GET /users/Exploser/contributions?from=2024-01-01&to=2024-12-31 HTTP/1.1\r\n");
+  // client.print("GET /Exploser?action=show&controller=profiles&tab=contributions&user_id=Exploser HTTP/1.1\r\n");
   client.print("Host: ");
   client.println(TEST_HOST);
   client.println("Connection: close");
@@ -100,7 +113,6 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
                     if (*count < MAX_COORDINATES) {
                       coordinates[*count][0] = x;
                       coordinates[*count][1] = y;
-                      // Serial.println(y);
                       (*count)++;
                     } else {
                       Serial.println("Reached maximum number of coordinates");
@@ -126,7 +138,22 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
   }
 
   Serial.println("Finished processing response.");
-  Serial.println(coordinates[0][0]);
+
+   // Loop through all the stored coordinates and print them
+  Serial.println("Stored Coordinates:");
+  for (int i = 0; i < *count; i++) {
+    Serial.print("Coordinate ");
+    Serial.print(i);
+    Serial.print(": (");
+    Serial.print(coordinates[i][0]);
+    Serial.print(", ");
+    Serial.print(coordinates[i][1]);
+    Serial.println(")");
+
+    display.setPoint(coordinates[i][0],(coordinates[i][1] - 6), true);
+  }
+
+  Serial.println("Total number of coordinates:");
   Serial.println(*count);
 
   // parseResponse(response);
