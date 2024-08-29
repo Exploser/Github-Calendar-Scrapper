@@ -1,4 +1,5 @@
 #include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
 #include <WiFiClientSecure.h>
 
 #include <MD_MAX72xx.h>
@@ -175,5 +176,6 @@ String extractAttribute(String element, String attribute) {
 void loop() {
   delay(60000);
   Serial.println("Refetching Data");
+  count = 0;
   makeHTTPRequest(&count, coordinates);
 }
