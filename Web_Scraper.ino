@@ -100,8 +100,10 @@ void makeHTTPRequest(int *count, int coordinates[MAX_COORDINATES][2]) {
   }
 
   Serial.println("Connected to server");
-
-  client.print("GET /users/Exploser/contributions?from=2024-01-01&to=2024-12-31 HTTP/1.1\r\n");
+  String githubUsername = readGitHubUsername();
+  String getRequest = "GET /users/" + githubUsername + "/contributions?from=2024-01-01&to=2024-12-31 HTTP/1.1\r\n";
+  
+  client.print(getRequest);
   client.print("Host: ");
   client.println(TEST_HOST);
   client.println("Connection: close");
