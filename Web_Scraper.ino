@@ -2,6 +2,7 @@
 #include <ESP8266WebServer.h>
 #include <WiFiClientSecure.h>
 #include <WiFiManager.h>
+
 #include <MD_MAX72xx.h>
 #include <EEPROM.h>
 #include <SPI.h>
@@ -19,6 +20,9 @@
 #define DATA_PIN   D7  // GPIO 13 on ESP8266 (D7 on NodeMCU)
 #define CS_PIN     D8  // GPIO 15 on ESP8266 (D8 on NodeMCU)
 #define CLK_PIN    D5  // GPIO 14 on ESP8266 (D5 on NodeMCU)
+
+#define WIFI "BIGPP"
+#define PASSWORD "password"
 
 MD_MAX72XX display = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 
@@ -40,6 +44,17 @@ void setup() {
 
   EEPROM.begin(EEPROM_SIZE); // Initialize EEPROM
   String storedUsername = readGitHubUsername();
+  String storedWIFI = WIFI;
+
+  // Check if a GitHub username is stored in EEPROM
+  if (storedUsername.length() > 0) {
+    Serial.println("Stored GitHub Username: " + storedUsername);
+
+    // Display the stored username on the LED matrix
+    displayTextOnMatrix("Hello, " + storedUsername);
+  } else {
+    Serial.println("No GitHub Username found in EEPROM.");
+  }
 
   // Define the custom parameter for the GitHub username
   int customFieldLength = 40; // Maximum length for the GitHub username input
@@ -50,8 +65,9 @@ void setup() {
   wm.setSaveParamsCallback(saveParamCallback);  // Callback to save custom parameters
 
   Serial.print("Connecting to WiFi using WiFiManager");
+  displayTextOnMatrix("Connect to: " + storedWIFI);
 
-  if (!wm.autoConnect("DeskHub", "password")) {
+  if (!wm.autoConnect(WIFI, PASSWORD)) {
     Serial.println("Failed to connect or hit timeout");
     delay(3000);
     ESP.restart();  // Restart if it fails to connect
@@ -203,6 +219,25 @@ String readGitHubUsername() {
   return String(username);
 }
 
+// Function to display text on the LED matrix across 4 displays
+void displayTextOnMatrix(String text) {
+  display.clear();  // Clear the display before showing the text
+  int textLength = text.length();
+  int maxDisplayChars = MAX_DEVICES * 8;  // Each display can show 8 columns
+
+  // Scroll the text if it exceeds the available width of 4 displays
+  for (int i = 0; i < textLength * 8 + maxDisplayChars; i++) {
+    display.clear();  // Clear the display for each scroll step
+
+    // Display the text with scrolling effect
+    for (int j = 0; j < textLength; j++) {
+      display.setChar((j * 8) - i, text[j]);  // Shift each character based on scroll position
+    }
+
+    display.update();  // Update the display to reflect changes
+    delay(100);  // Adjust scrolling speed (lower for faster, higher for slower)
+  }
+}
 
 void loop() {
   delay(60000);
