@@ -271,6 +271,7 @@ void resetSettings() {
 }
 
 void loop() {
+  int refetchCounter = 0;
   // Check button press
   if (digitalRead(BUTTON_PIN) == LOW) { // Button pressed (assuming active low)
     if (!isButtonPressed) {
@@ -285,5 +286,13 @@ void loop() {
     isButtonPressed = false;
   }
 
+  refetchCounter++;
+
+  // Refetch Data after 60 secs
+  if (refetchCounter == 60){
+    Serial.println("Refetching Data");
+    refetchCounter = 0;
+    makeHTTPRequest(&count, coordinates);
+  }
   delay(1000); // Adjust the loop interval
 }
