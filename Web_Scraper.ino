@@ -17,10 +17,10 @@
 #define EEPROM_SIZE 512         // Define the size of EEPROM
 #define GITHUB_USERNAME_ADDR 0  // Start address for GitHub username
 
-#define DATA_PIN D7    // GPIO 13 on ESP8266 (D7 on NodeMCU)
-#define CS_PIN D8      // GPIO 15 on ESP8266 (D8 on NodeMCU)
-#define CLK_PIN D5     // GPIO 14 on ESP8266 (D5 on NodeMCU)
-#define RESET_PIN D6  // GPIO 12 on ESP8266 (D6 on NodeMCU)
+#define DATA_PIN   D7    // GPIO 13 on ESP8266 (D7 on NodeMCU)
+#define CS_PIN     D8      // GPIO 15 on ESP8266 (D8 on NodeMCU)
+#define CLK_PIN    D5     // GPIO 14 on ESP8266 (D5 on NodeMCU)
+#define RESET_PIN  D6  // GPIO 12 on ESP8266 (D6 on NodeMCU)
 
 #define WIFI "BIGPP"
 #define PASSWORD "password"
