@@ -20,7 +20,7 @@
 #define DATA_PIN D7    // GPIO 13 on ESP8266 (D7 on NodeMCU)
 #define CS_PIN D8      // GPIO 15 on ESP8266 (D8 on NodeMCU)
 #define CLK_PIN D5     // GPIO 14 on ESP8266 (D5 on NodeMCU)
-#define BUTTON_PIN D6  // GPIO 12 on ESP8266 (D6 on NodeMCU)
+#define RESET_PIN D6  // GPIO 12 on ESP8266 (D6 on NodeMCU)
 
 #define WIFI "BIGPP"
 #define PASSWORD "password"
@@ -45,7 +45,7 @@ void setup() {
   Serial.begin(230400);
 
   // Initialize button pin
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(RESET_PIN, INPUT_PULLUP);
 
   display.begin();  // Initialize the display
   display.clear();  // Clear any previous data
@@ -273,7 +273,7 @@ void resetSettings() {
 void loop() {
   int refetchCounter = 0;
   // Check button press
-  if (digitalRead(BUTTON_PIN) == LOW) { // Button pressed (assuming active low)
+  if (digitalRead(RESET_PIN) == LOW) { // Button pressed (assuming active low)
     if (!isButtonPressed) {
       buttonPressStartTime = millis();
       isButtonPressed = true;
