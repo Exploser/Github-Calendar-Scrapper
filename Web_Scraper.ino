@@ -22,8 +22,8 @@
 #define CLK_PIN    D5      // GPIO 14 on ESP8266 (D5 on NodeMCU)
 #define RESET_PIN  D6      // GPIO 12 on ESP8266 (D6 on NodeMCU)
 
-#define WIFI "BIGPP"
-#define PASSWORD "password"
+#define WIFI "Who stole my mom?"
+#define PASSWORD "goose"
 
 MD_MAX72XX display = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 
