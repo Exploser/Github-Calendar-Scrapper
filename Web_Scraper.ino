@@ -54,10 +54,6 @@ void setup() {
   String storedUsername = readGitHubUsername();
   String storedWIFI = WIFI;
 
-  // Button press duration
-  unsigned long buttonPressStartTime = 0;
-  bool isButtonPressed = false;
-
   // Check if a GitHub username is stored in EEPROM
   if (storedUsername.length() > 0) {
     Serial.println("Stored GitHub Username: " + storedUsername);
